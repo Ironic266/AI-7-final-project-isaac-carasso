@@ -2,10 +2,70 @@
 agno: ideaToProd
 """
 
+from __future__ import annotations
+from dotenv import load_dotenv
+import os
+
 AGNO = "ideaToProd"
+load_dotenv()
 
 
-def create_detailed_design(high_level_design: str, clarification: str | None = None) -> str:
+def _normalize_agent_output(response: object) -> str:
+    if isinstance(response, str):
+        return response.strip()
+
+    for attribute in ("content", "text", "output", "message"):
+        value = getattr(response, attribute, None)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+
+    return str(response).strip()
+
+
+def create_detailed_design(
+    high_level_design: str,
+    clarification: str | None = None,
+    model: object | None = None,
+) -> str:
+    try:
+        from agno.agent import Agent
+        from agno.models.openai import OpenAIResponses
+    except ImportError:
+        Agent = None
+        OpenAIResponses = None
+
+    if Agent is not None and OpenAIResponses is not None:
+        agent = Agent(
+            model=model or OpenAIResponses(id=os.getenv("IDEA_TO_PROD_MODEL", "gpt-5.2")),
+            description="Creates structured development tasks from a detailed design.",
+            instructions=[
+                "You are a planning agent that converts a detailed design into development work items.",
+                "Return only valid JSON.",
+                "Return an object with one top-level key named tasks.",
+                "tasks must be an array.",
+                "Each task must contain: summary, description, issue_type, phase, labels.",
+                "issue_type should usually be Task, Story, or Sub-task.",
+                "Descriptions must be implementation-ready and concise.",
+                "Create tasks grouped across phases, with enough detail for Jira import."
+            ],
+            markdown=False,
+        )
+
+        prompt = (
+            "Create a set of structured development tasks from the detailed design below:\n"
+            f"{high_level_design}\n"
+        )
+        if clarification:
+            prompt += f"Additional clarification: {clarification}\n"
+
+        try:
+            response = agent.run(prompt)
+            generated = _normalize_agent_output(response)
+            if generated:
+                return generated
+        except Exception:
+            pass
+
     if clarification:
         return (
             "Detailed design updated with clarification:\n\n"
