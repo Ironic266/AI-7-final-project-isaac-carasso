@@ -40,11 +40,15 @@ def create_detailed_design(
             description="Creates structured development tasks from a detailed design.",
             instructions=[
                 "You are a planning agent that converts a detailed design into development work items.",
+                "Use the high_level_design argument in order to create a detailed design for the application.",
                 "Return only valid JSON.",
                 "Return an object with one top-level key named tasks.",
                 "tasks must be an array.",
-                "Each task must contain: summary, description, issue_type, phase, labels.",
-                "issue_type should usually be Task, Story, or Sub-task.",
+                "The first item in tasks must be an Epic that repeats the application name and conveys the general description.",
+                "The Epic item must contain summary, description, issue_type, phase, labels, and children.",
+                "children must be an array of the child work items for that Epic.",
+                "Each child task must contain: summary, description, issue_type, phase, labels.",
+                "issue_type should usually be Epic, Task, Story, or Sub-task.",
                 "Descriptions must be implementation-ready and concise.",
                 "Create tasks grouped across phases, with enough detail for Jira import."
             ],
@@ -52,7 +56,8 @@ def create_detailed_design(
         )
 
         prompt = (
-            "Create a set of structured development tasks from the detailed design below:\n"
+            "Create a set of structured development tasks from the detailed design below.\n"
+            "Include one Epic in the result, and place the remaining tasks as children of that Epic.\n"
             f"{high_level_design}\n"
         )
         if clarification:

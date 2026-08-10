@@ -17,7 +17,7 @@ def execute_tests(project_dir: Path, clarification: str | None = None) -> str:
     existing_path = env.get("PYTHONPATH", "")
     env["PYTHONPATH"] = str(code_dir) + os.pathsep + existing_path
 
-    command = ["python", "-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py"]
+    command = ["python", "-m", "pytest", "-q", "tests"]
     result = subprocess.run(
         command,
         cwd=project_dir,
