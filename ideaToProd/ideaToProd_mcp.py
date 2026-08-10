@@ -106,10 +106,51 @@ def verify_tests(output: str) -> bool:
     return "def test_summary_not_empty" in output and "def test_run_application_returns_none" in output
 
 
+def get_clarification_prompts(stage_name: str) -> list[str]:
+    prompts = {
+        "high-level design": [
+            "Clarify the main user personas and what they need from the system.",
+            "Clarify the primary product goals and success criteria.",
+            "Clarify any constraints or assumptions you want the design to honor.",
+        ],
+        "detailed design": [
+            "Clarify the desired module structure or component boundaries.",
+            "Clarify any important performance, error handling, or validation requirements.",
+            "Clarify what should be easy to test or validate in the resulting design.",
+        ],
+        "code generation": [
+            "Clarify any specific implementation details, APIs, or behaviors that must be present.",
+            "Clarify how edge cases and invalid inputs should be handled.",
+            "Clarify what the expected application entry point and observable outputs should be.",
+        ],
+        "unit test generation": [
+            "Clarify which code paths and functions are most important to verify.",
+            "Clarify any edge cases or failure modes that must be covered.",
+            "Clarify what regression risk should be protected by a dedicated regression test.",
+        ],
+    }
+    return prompts.get(stage_name, [
+        "Clarify the missing or uncertain requirements for this stage.",
+        "Clarify any acceptance criteria or expected behavior.",
+    ])
+
+
 def request_clarification(stage_name: str) -> str | None:
-    print(f"\nClarification required for {stage_name}.")
-    clarification = input("Please provide additional guidance, or press Enter to accept the generated artifact: ").strip()
-    return clarification or None
+    prompts = get_clarification_prompts(stage_name)
+    answers: list[str] = []
+
+    print(f"\nClarification required for {stage_name}. Answer each prompt or press Enter to accept it.")
+    for prompt in prompts:
+        print(f"\n- {prompt}")
+        answer = input("Provide guidance, or press Enter to accept this item: ").strip()
+        if answer:
+            answers.append(f"{prompt}\n{answer}")
+
+    if not answers:
+        print("All clarification prompts were accepted as-is.")
+        return None
+
+    return "\n\n".join(answers)
 
 
 def run_agent_with_verification(
