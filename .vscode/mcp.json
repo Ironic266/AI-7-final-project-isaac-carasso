@@ -1,0 +1,11 @@
+{
+  "servers": {
+    "ideaToProd": {
+        "command": "python",
+        "args":["ideaToProd/server.py",
+                "name",
+                "description", 
+        ],
+    }
+  }
+}

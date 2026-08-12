@@ -65,6 +65,7 @@ def generate_unit_tests(
                 "Ensure the tests import code from the sibling code directory when run from the project root.",
                 "Create a proper Python test package by including tests/__init__.py.",
                 "Prefer focused test modules and helper utilities over a single monolithic file.",
+                "create a command line runnable script to run the tests and report results in a human-readable format.",
             ],
             markdown=False,
         )
