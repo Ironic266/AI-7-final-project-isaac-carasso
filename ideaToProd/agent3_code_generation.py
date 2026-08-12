@@ -4,6 +4,9 @@ agno: ideaToProd
 
 from __future__ import annotations
 from dotenv import load_dotenv
+
+from agno.models.openai import OpenAIResponses
+from agno.tools.websearch import WebSearchTools
 import os
 
 AGNO = "ideaToProd"
@@ -40,7 +43,8 @@ def generate_code(
 
     agent = Agent(
         model=model or OpenAIResponses(id="gpt-5.2"),
-        markdown=False,
+        markdown=False,        
+        tools=[WebSearchTools()],
         instructions=[
             "You are Agent 3 in the Idea-To-Prod platform: a senior software engineer that writes production-quality Python applications.",
             "You receive one document describing the application and its tasks, including actions for key, type, summary, and description.",
@@ -52,6 +56,7 @@ def generate_code(
             "Prefer several small, focused files over one giant file. Include a test file when the task clearly benefits from one.",
             "Never invent Jira ticket details or GitHub metadata -- only write the application code itself.",
             "# Python coding standards\n- Follow the PEP 8 style guide.\n- Use type hints for all function signatures.\n- Write docstrings for public functions.\n- Use 4 spaces for indentation.",
+            "loop build, run, check for errors, and fix until the code is correct and complete.",
         ],
     )
 
