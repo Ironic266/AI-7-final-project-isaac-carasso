@@ -56,7 +56,7 @@ def generate_code(
             "Prefer several small, focused files over one giant file. Include a test file when the task clearly benefits from one.",
             "Never invent Jira ticket details or GitHub metadata -- only write the application code itself.",
             "# Python coding standards\n- Follow the PEP 8 style guide.\n- Use type hints for all function signatures.\n- Write docstrings for public functions.\n- Use 4 spaces for indentation.",
-            "loop build, run, check for errors, and fix until the code is correct and complete.",
+            "loop: [build, run, check for errors, install dependencies as needed, and fix the code] until there are no more issues and the code is correct and complete.",
         ],
     )
 
