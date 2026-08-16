@@ -135,8 +135,43 @@ def get_clarification_prompts(stage_name: str) -> list[str]:
     ])
 
 
-def request_clarification(stage_name: str) -> str | None:
-    prompts = get_clarification_prompts(stage_name)
+def write_generated_files(base_dir: Path, generated_files: list[dict]) -> None:
+    for file_item in generated_files:
+        file_path = base_dir / file_item["path"]
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        write_text_file(file_path, file_item["content"])
+
+
+def dump_code_dir(code_dir: Path) -> str:
+    sections: list[str] = []
+    for path in sorted(code_dir.rglob("*.py")):
+        if path.is_file():
+            relative_path = path.relative_to(code_dir).as_posix()
+            sections.append(f"# path: {relative_path}\n{path.read_text(encoding='utf-8')}")
+    return "\n\n".join(sections)
+
+
+def extract_open_questions(hl_design: str) -> list[str]:
+    lines = hl_design.splitlines()
+    questions: list[str] = []
+    in_section = False
+
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("#"):
+            in_section = re.sub(r"^#+\s*", "", stripped).strip().lower() == "open questions"
+            continue
+        if not in_section or not stripped:
+            continue
+        question = re.sub(r"^[-*]\s+|^\d+[.)]\s+", "", stripped).strip()
+        if question:
+            questions.append(question)
+
+    return questions
+
+
+def request_clarification(stage_name: str, extra_prompts: list[str] | None = None) -> str | None:
+    prompts = get_clarification_prompts(stage_name) + (extra_prompts or [])
     answers: list[str] = []
 
     print(f"\nClarification required for {stage_name}. Answer each prompt or press Enter to accept it.")
@@ -158,17 +193,23 @@ def run_agent_with_verification(
     action: Callable[..., str],
     validator: Callable[[str], bool],
     *args,
+    extra_prompts: list[str] | None = None,
 ) -> tuple[str, str | None]:
     output = action(*args)
     if validator(output):
         return output, None
 
-    clarification = request_clarification(stage_name)
+    report_progress(f"{stage_name}: output needs clarification, requesting input...")
+    clarification = request_clarification(stage_name, extra_prompts=extra_prompts)
     if clarification is None:
         return output, None
 
     output = action(*args, clarification=clarification)
     return output, clarification
+
+
+def report_progress(message: str) -> None:
+    print(f"[ideaToProd] {message}", flush=True)
 
 
 def orchestrate(idea_name: str, idea_description: str) -> str:
@@ -181,6 +222,9 @@ def orchestrate(idea_name: str, idea_description: str) -> str:
     tests_dir = project_root / "tests"
     results_dir = project_root / "results"
 
+    report_progress(f"Project folder ready at {project_root}")
+
+    report_progress("Step 1/5: Generating high-level design...")
     hl_design, hl_clarification = run_agent_with_verification(
         "high-level design",
         create_hl_design,
@@ -190,16 +234,22 @@ def orchestrate(idea_name: str, idea_description: str) -> str:
     )
     remove_file_if_exists(docs_dir / "high_level_design.txt")
     write_text_file(docs_dir / "high_level_design.md", hl_design)
+    report_progress("Step 1/5: High-level design complete.")
 
+    report_progress("Step 2/5: Generating detailed design...")
+    open_questions = extract_open_questions(hl_design)
     detailed_design, detailed_clarification = run_agent_with_verification(
         "detailed design",
         create_detailed_design,
         verify_detailed_design,
         hl_design,
+        extra_prompts=open_questions,
     )
     remove_file_if_exists(docs_dir / "detailed_design.txt")
     write_text_file(docs_dir / "detailed_design.md", detailed_design)
+    report_progress("Step 2/5: Detailed design complete.")
 
+    report_progress("Step 3/5: Generating application code...")
     code_text, code_clarification = run_agent_with_verification(
         "code generation",
         generate_code,
@@ -209,13 +259,12 @@ def orchestrate(idea_name: str, idea_description: str) -> str:
 
     generated_files = parse_generated_code_output(code_text)
     if generated_files is not None:
-        for file_item in generated_files:
-            file_path = code_dir / file_item["path"]
-            file_path.parent.mkdir(parents=True, exist_ok=True)
-            write_text_file(file_path, file_item["content"])
+        write_generated_files(code_dir, generated_files)
     else:
         write_text_file(code_dir / "app.py", code_text)
+    report_progress("Step 3/5: Code generation complete.")
 
+    report_progress("Step 4/5: Generating unit tests...")
     tests_text, tests_clarification = run_agent_with_verification(
         "unit test generation",
         generate_unit_tests,
@@ -225,19 +274,48 @@ def orchestrate(idea_name: str, idea_description: str) -> str:
     )
     generated_test_files = parse_generated_code_output(tests_text)
     if generated_test_files is not None:
-        for file_item in generated_test_files:
-            file_path = tests_dir / file_item["path"]
-            file_path.parent.mkdir(parents=True, exist_ok=True)
-            write_text_file(file_path, file_item["content"])
+        write_generated_files(tests_dir, generated_test_files)
         if not (tests_dir / "__init__.py").exists():
             write_text_file(tests_dir / "__init__.py", "# Test package for generated code.\n")
     else:
         if not (tests_dir / "__init__.py").exists():
             write_text_file(tests_dir / "__init__.py", "# Test package for generated code.\n")
         write_text_file(tests_dir / "test_app.py", tests_text)
+    report_progress("Step 4/5: Unit test generation complete.")
 
-    test_results = execute_tests(project_root)
+    max_fix_attempts = 3
+    fix_attempts = 0
+    report_progress("Step 5/5: Executing tests...")
+    test_results, tests_passed = execute_tests(project_root)
     write_text_file(results_dir / "test_results.txt", test_results)
+    report_progress(f"Step 5/5: Test run complete - {'PASSED' if tests_passed else 'FAILED'}.")
+
+    while not tests_passed and fix_attempts < max_fix_attempts:
+        fix_attempts += 1
+        report_progress(
+            f"Tests failed. Starting fix attempt {fix_attempts}/{max_fix_attempts}..."
+        )
+        existing_code = dump_code_dir(code_dir)
+        fixed_code_text = generate_code(
+            detailed_design,
+            existing_code=existing_code,
+            test_results=test_results,
+        )
+        fixed_files = parse_generated_code_output(fixed_code_text)
+        if fixed_files is not None:
+            write_generated_files(code_dir, fixed_files)
+        else:
+            write_text_file(code_dir / "app.py", fixed_code_text)
+        report_progress(f"Fix attempt {fix_attempts}/{max_fix_attempts}: code updated, re-running tests...")
+
+        test_results, tests_passed = execute_tests(project_root)
+        write_text_file(results_dir / "test_results.txt", test_results)
+        report_progress(
+            f"Fix attempt {fix_attempts}/{max_fix_attempts}: test run complete - "
+            f"{'PASSED' if tests_passed else 'FAILED'}."
+        )
+
+    report_progress("Pipeline complete." if tests_passed else "Pipeline complete with remaining test failures.")
 
     summary_lines = [
         f"Project directory: {project_root}",
@@ -251,6 +329,14 @@ def orchestrate(idea_name: str, idea_description: str) -> str:
         summary_lines.append("Code generation was adjusted using user clarification.")
     if tests_clarification:
         summary_lines.append("Test generation was adjusted using user clarification.")
+    if fix_attempts:
+        summary_lines.append(
+            f"Code was automatically fixed {fix_attempts} time(s) based on test/runtime results."
+        )
+    if tests_passed:
+        summary_lines.append("All tests passed.")
+    else:
+        summary_lines.append(f"Tests still failing after {fix_attempts} fix attempt(s).")
     summary_lines.append("Final test execution results are saved under results/test_results.txt.")
     summary_lines.append("\n" + test_results)
 

@@ -19,3 +19,5 @@ ideaToProd/__pycache__/agent1_hl_design.cpython-314.pyc
 *.zip
 *.gif
 ideaToProd/__pycache__/agent5_test_execution.cpython-314.pyc
+ideaToProd/run_agentic_local_hourglass.py
+ideaToProd/__pycache__/agent5_test_execution.cpython-314.pyc

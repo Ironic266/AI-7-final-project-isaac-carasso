@@ -1,7 +1,8 @@
+from __future__ import annotations
+from dotenv import load_dotenv
+load_dotenv()
+
 from fastmcp import FastMCP
-import requests
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
 from ideaToProd_mcp import orchestrate 
 
 #  1 - Initialization

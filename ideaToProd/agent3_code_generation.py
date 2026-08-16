@@ -34,12 +34,16 @@ def generate_code(
     detailed_design: str,
     clarification: str | None = None,
     model: object | None = None,
+    existing_code: str | None = None,
+    test_results: str | None = None,
 ) -> str:
     try:
         from agno.agent import Agent
         from agno.models.openai import OpenAIResponses
     except ImportError:
         raise
+
+    fixing_mode = bool(existing_code and test_results)
 
     agent = Agent(
         model=model or OpenAIResponses(id="gpt-5.2"),
@@ -57,16 +61,29 @@ def generate_code(
             "Never invent Jira ticket details or GitHub metadata -- only write the application code itself.",
             "# Python coding standards\n- Follow the PEP 8 style guide.\n- Use type hints for all function signatures.\n- Write docstrings for public functions.\n- Use 4 spaces for indentation.",
             "loop: [build, run, check for errors, install dependencies as needed, and fix the code] until there are no more issues and the code is correct and complete.",
+            "When given existing code plus failing test/runtime results, diagnose the root cause and return the full corrected set of files rather than a partial patch.",
         ],
     )
 
-    prompt = (
-        "Generate production-quality Python code for the application described below.\n"
-        "Use the provided detailed design and task list to produce a real working implementation.\n"
-        "Return only a single valid JSON object with files and summary.\n"
-        "Do not include prose or markdown fences.\n\n"
-        f"{detailed_design}\n"
-    )
+    if fixing_mode:
+        prompt = (
+            "The application below already has an implementation, but running its tests or the application itself\n"
+            "revealed failures. Fix the existing code so that all tests pass and runtime issues are resolved.\n"
+            "Keep the original detailed design intact; only change what is necessary to fix the failures.\n"
+            "Return only a single valid JSON object with the full corrected set of files and summary.\n"
+            "Do not include prose or markdown fences.\n\n"
+            f"Detailed design:\n{detailed_design}\n\n"
+            f"Existing code (path -> content):\n{existing_code}\n\n"
+            f"Test/runtime results to fix:\n{test_results}\n"
+        )
+    else:
+        prompt = (
+            "Generate production-quality Python code for the application described below.\n"
+            "Use the provided detailed design and task list to produce a real working implementation.\n"
+            "Return only a single valid JSON object with files and summary.\n"
+            "Do not include prose or markdown fences.\n\n"
+            f"{detailed_design}\n"
+        )
     if clarification:
         prompt += f"Additional clarification: {clarification}\n"
 
