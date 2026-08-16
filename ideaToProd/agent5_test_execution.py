@@ -12,6 +12,8 @@ from pathlib import Path
 from dotenv import load_dotenv
 import json
 
+from pytest import main
+
 AGNO = "ideaToProd"
 load_dotenv()
 
@@ -100,7 +102,7 @@ def execute_tests(
     project_dir: Path,
     clarification: str | None = None,
     model: object | None = None,
-) -> str:
+) -> tuple[str, bool]:
     code_dir = project_dir / "code"
     tests_dir = project_dir / "tests"
     results_dir = project_dir / "results"
@@ -180,4 +182,15 @@ def execute_tests(
 
     report_path = results_dir / "test_results_human_readable.txt"
     report_path.write_text(final_report, encoding="utf-8")
-    return final_report
+    tests_passed = suite_return_code == 0 and all(item["status"] == "PASS" for item in per_file_results)
+    return final_report, tests_passed
+
+
+def main(project_dir: Path):
+    execute_tests(project_dir)
+
+
+if __name__ == "__main__":
+    import sys
+    from pathlib import Path
+    main(Path(sys.argv[1]))
