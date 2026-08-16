@@ -65,7 +65,10 @@ def generate_unit_tests(
                 "Ensure the tests import code from the sibling code directory when run from the project root.",
                 "Create a proper Python test package by including tests/__init__.py.",
                 "Prefer focused test modules and helper utilities over a single monolithic file.",
-                "create a command line runnable script to run the tests and report results in a human-readable format.",
+                "Create a command-line runnable script at tests/run_tests.py that:",
+                "  - ensures the project's `code` directory is added to `sys.path` and `PYTHONPATH` before running pytest,",
+                "  - runs the full pytest suite and writes a human-readable report to a results file,",
+                "  - exits with the pytest return code so it can be invoked manually (e.g. `python tests/run_tests.py`).",
             ],
             markdown=False,
         )
@@ -95,6 +98,22 @@ def generate_unit_tests(
             "path": "__init__.py",
             "content": "# Test package for generated application code.\n",
         },
+            {
+                "path": "conftest.py",
+                "content": (
+                    "from pathlib import Path\n"
+                    "import os, sys\n\n"
+                    "# Ensure the sibling 'code' directory is importable in tests and subprocesses.\n"
+                    "CODE_DIR = str(Path(__file__).resolve().parent.parent / 'code')\n"
+                    "if CODE_DIR not in sys.path:\n"
+                    "    sys.path.insert(0, CODE_DIR)\n\n"
+                    "prev = os.environ.get('PYTHONPATH', '')\n"
+                    "parts = [p for p in prev.split(os.pathsep) if p]\n"
+                    "if CODE_DIR not in parts:\n"
+                    "    parts.insert(0, CODE_DIR)\n"
+                    "    os.environ['PYTHONPATH'] = os.pathsep.join(parts)\n"
+                ),
+            },
         {
             "path": "test_generated_application.py",
             "content": (
@@ -112,6 +131,40 @@ def generate_unit_tests(
                 "    assert run_application() is None\n\n"
                 "def test_regression_summary_not_empty_after_empty_input() -> None:\n"
                 "    assert get_application_summary() != ''\n"
+            ),
+        },
+        {
+            "path": "run_tests.py",
+            "content": (
+                "from pathlib import Path\n"
+                "import os, sys, subprocess, time\n\n"
+                "def ensure_pythonpath():\n"
+                "    project_root = Path(__file__).resolve().parent.parent\n"
+                "    code_dir = project_root / 'code'\n"
+                "    existing = os.environ.get('PYTHONPATH', '')\n"
+                "    parts = [p for p in existing.split(os.pathsep) if p]\n"
+                "    if str(code_dir) not in parts:\n"
+                "        parts.insert(0, str(code_dir))\n"
+                "        os.environ['PYTHONPATH'] = os.pathsep.join(parts)\n"
+                "    if str(code_dir) not in sys.path:\n"
+                "        sys.path.insert(0, str(code_dir))\n\n"
+                "def run_suite():\n"
+                "    ensure_pythonpath()\n"
+                "    project_root = Path(__file__).resolve().parent.parent\n"
+                "    results_dir = project_root / 'results'\n"
+                "    results_dir.mkdir(parents=True, exist_ok=True)\n"
+                "    cmd = [sys.executable, '-m', 'pytest', '-q', 'tests']\n"
+                "    start = time.perf_counter()\n"
+                "    res = subprocess.run(cmd, cwd=project_root, capture_output=True, text=True, env=os.environ.copy())\n"
+                "    duration = time.perf_counter() - start\n"
+                "    output = (res.stdout or '') + '\n' + (res.stderr or '')\n"
+                "    report_path = results_dir / 'test_results_human_readable.txt'\n"
+                "    report = f'Manual test run (run_tests.py)\nReturn code: {res.returncode}\nDuration: {duration:.3f}s\n\n{output}\n'\n"
+                "    report_path.write_text(report, encoding='utf-8')\n"
+                "    print(report)\n"
+                "    return res.returncode\n\n"
+                "if __name__ == '__main__':\n"
+                "    raise SystemExit(run_suite())\n"
             ),
         },
     ]
