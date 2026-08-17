@@ -69,6 +69,7 @@ def generate_unit_tests(
                 "  - ensures the project's `code` directory is added to `sys.path` and `PYTHONPATH` before running pytest,",
                 "  - runs the full pytest suite and writes a human-readable report to a results file,",
                 "  - exits with the pytest return code so it can be invoked manually (e.g. `python tests/run_tests.py`).",
+                "make sure the code directory is on sys.path and PYTHONPATH in the generated tests, so that the tests can be run from the project root.",
             ],
             markdown=False,
         )
