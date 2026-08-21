@@ -19,6 +19,7 @@ from agent2_detailed_design import create_detailed_design
 from agent3_code_generation import generate_code
 from agent4_unit_test_generation import generate_unit_tests
 from agent5_test_execution import execute_tests
+from agent6_deployment import package_application
 
 
 PROJECT_SUBFOLDERS = ["docs", "code", "tests", "results"]
@@ -316,6 +317,16 @@ def orchestrate(idea_name: str, idea_description: str) -> str:
         )
 
     report_progress("Pipeline complete." if tests_passed else "Pipeline complete with remaining test failures.")
+
+    # Step 6: Attempt to package the application into a self-contained artifact.
+    report_progress("Step 6/6: Packaging application...")
+    try:
+        deploy_log, deploy_ok = package_application(project_root)
+    except Exception as ex:  # defensive: ensure orchestrator never crashes on packaging
+        deploy_log = f"Packaging raised an unexpected exception: {ex}"
+        deploy_ok = False
+    write_text_file(results_dir / "deployment.txt", deploy_log)
+    report_progress(f"Step 6/6: Packaging {'SUCCEEDED' if deploy_ok else 'FAILED'}.")
 
     summary_lines = [
         f"Project directory: {project_root}",
